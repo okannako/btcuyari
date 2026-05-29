@@ -1,4 +1,286 @@
 
+# ₿ BTC Analiz Botu v2.0
+
+Her 15 dakikada bir (**:00, :15, :30, :45**) BTCUSDT için kapsamlı teknik analiz raporu hazırlayıp Telegram'a gönderen Node.js botu.
+
+**İşlem açmaz. Sadece analiz yapar.**
+
+---
+
+## 📊 Rapor İçeriği
+
+| Bölüm | Detay |
+|---|---|
+| 💰 Fiyat | Güncel fiyat, 24 saatlik değişim, yüksek/düşük |
+| 🏆 Genel Durum | 0–100 arası bileşik skor ve karar (Güçlü Boğa → Güçlü Ayı) |
+| 📈 Trend Özeti | EMA21 / EMA50 / EMA200 — 1 saat ve 4 saat karşılaştırmalı |
+| 🏗️ Market Yapısı | HH/HL, LH/LL swing yapısı — 1 saat ve 4 saat |
+| 📊 MACD | 12/26/9 — 15dk mumdan, histogram yönü |
+| 📉 Bollinger Band | 20/2 — 15dk, %B ve band genişliği |
+| 🔍 RSI & ATR | RSI(14) ve ATR(14) — 15dk |
+| 🌊 Hacim | Ortalamaya göre çarpan ve trend — 15dk |
+| ⚡ Funding Rate | Bybit USDT Perp, sonraki funding saati |
+| 😱 Fear & Greed | alternative.me endeksi, günlük değişim |
+| 📊 Open Interest | 4 saatlik OI değişimi |
+| 📐 IFVG | 1 saatlik grafikte aktif Imbalance Fair Value Gap destek bölgeleri |
+
+---
+
+## 🗂️ Dosya Yapısı
+
+```
+btc-bot/
+├── index.js        → Ana döngü, zamanlama, graceful shutdown
+├── fetcher.js      → Bybit API + Fear & Greed veri çekici
+├── analyzer.js     → Ham veriyi analiz objesine dönüştürür
+├── indicators.js   → RSI, EMA, MACD, BB, ATR, Market Yapısı, IFVG algoritmaları
+├── telegram.js     → Rapor oluşturucu ve Telegram gönderici
+├── config.js       → Tüm parametreler (.env'den okur)
+├── package.json
+├── .env.example    → Ortam değişkeni şablonu
+└── README.md
+```
+
+---
+
+## 🖥️ Ubuntu 22.04 — Sıfırdan Kurulum
+
+### 1. Sistemi Güncelle
+
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+
+### 2. Node.js 20 Kur
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+```
+
+Doğrula:
+
+```bash
+node -v   # v20.x.x görmeli
+npm -v    # 10.x.x görmeli
+```
+
+### 3. PM2 Kur (arka plan için)
+
+```bash
+sudo npm install -g pm2
+```
+
+### 4. Projeyi Klonla veya Dosyaları Kopyala
+
+```bash
+# GitHub'dan klonlayacaksan:
+git clone https://github.com/KULLANICI_ADIN/btc-bot.git
+cd btc-bot
+
+# Ya da manuel olarak klasör oluştur:
+mkdir ~/btc-bot && cd ~/btc-bot
+# Tüm .js ve .json dosyalarını bu klasöre kopyala
+```
+
+### 5. Bağımlılıkları Yükle
+
+```bash
+npm install
+```
+
+### 6. Telegram Bot Oluştur
+
+**Token almak için:**
+1. Telegram'da **@BotFather**'ı aç
+2. `/newbot` yaz ve adımları takip et
+3. Verilen token'ı kopyala: `1234567890:ABCdef...`
+
+**Chat ID almak için:**
+1. Telegram'da **@userinfobot**'u aç
+2. `/start` yaz
+3. Verilen ID'yi kopyala: `987654321`
+
+### 7. Ortam Değişkenlerini Ayarla
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+`.env` içeriği:
+
+```env
+TELEGRAM_BOT_TOKEN=buraya_token_yaz
+TELEGRAM_CHAT_ID=buraya_chat_id_yaz
+TELEGRAM_ENABLED=true
+```
+
+Kaydet: `Ctrl+O` → `Enter` → `Ctrl+X`
+
+### 8. Test Olarak Çalıştır
+
+```bash
+node index.js
+```
+
+Konsol çıktısı şu şekilde başlamalı:
+
+```
+╔══════════════════════════════════════════════════════════╗
+║   BTC Analiz Botu v2.0                                   ║
+╚══════════════════════════════════════════════════════════╝
+
+[i] Veri çekiliyor...
+[★] ✅ Rapor gönderildi
+[i] === Sonraki rapor: 13:15 ===
+```
+
+Telegram'a ilk rapor geldiyse `Ctrl+C` ile durdur ve sonraki adıma geç.
+
+### 9. PM2 ile Arka Planda Sürekli Çalıştır
+
+```bash
+# Botu başlat
+pm2 start index.js --name btc-bot
+
+# Sistem yeniden başlayınca otomatik çalışsın
+pm2 startup
+# Çıkan komutu kopyalayıp yapıştır (sudo ile başlar), sonra:
+pm2 save
+
+# Durumu kontrol et
+pm2 status
+
+# Logları takip et
+pm2 logs btc-bot
+
+# Botu durdur
+pm2 stop btc-bot
+
+# Botu yeniden başlat
+pm2 restart btc-bot
+```
+
+---
+
+## ⚙️ Konfigürasyon
+
+Tüm parametreler `config.js` içinde tanımlıdır. `.env` dosyasıyla override edilebilir.
+
+| Parametre | Varsayılan | Açıklama |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | — | BotFather'dan alınan token |
+| `TELEGRAM_CHAT_ID` | — | Mesaj gönderilecek chat ID |
+| `TELEGRAM_ENABLED` | `true` | `false` yapılırsa sadece konsola yazar |
+| `REPORT_INTERVAL_MS` | `900000` | Rapor aralığı (ms). 15dk = 900000 |
+
+> **Not:** `REPORT_INTERVAL_MS` değiştirilse bile bot her zaman `:00/:15/:30/:45` dakikalarında senkronize çalışır.
+
+---
+
+## 📡 Kullanılan API'ler
+
+| API | Amaç | Ücret |
+|---|---|---|
+| [Bybit v5](https://bybit-exchange.github.io/docs/v5/intro) | Mum verisi, ticker, funding rate, open interest | Ücretsiz |
+| [alternative.me](https://alternative.me/crypto/fear-and-greed-index/) | Fear & Greed endeksi | Ücretsiz |
+
+API key gerektirmez. Bybit public endpoint'leri kullanılır.
+
+---
+
+## 📐 Teknik Göstergeler
+
+### RSI (14)
+Momentum göstergesi. 70+ aşırı alım, 30- aşırı satım. **15dk mumdan** hesaplanır.
+
+### EMA (21 / 50 / 200)
+Üstel hareketli ortalama. **1 saat ve 4 saat** karşılaştırmalı gösterilir.
+- Fiyat EMA200 üstünde → uzun vadeli boğa
+- EMA21 > EMA50 > EMA200 sıralaması → güçlü boğa trendi
+
+### MACD (12/26/9)
+Trend ve momentum göstergesi. Histogram artıyorsa momentum güçleniyor. **15dk mumdan** hesaplanır.
+
+### Bollinger Band (20/2)
+Volatilite bandı. `%B` değeri:
+- 80+ → üst banda yakın (aşırı alım riski)
+- 20- → alt banda yakın (aşırı satım fırsatı)
+- Band daralması → büyük hareket öncesi sessizlik
+
+### ATR (14)
+Ortalama gerçek aralık. Volatilite ölçer. **15dk mumdan** hesaplanır.
+
+### Market Yapısı (Swing High/Low)
+Her iki yana 5 mum bakarak swing noktaları tespit eder. **1 saat ve 4 saat** gösterilir.
+- **HH/HL** → Boğa yapısı (Higher High / Higher Low)
+- **LH/LL** → Ayı yapısı (Lower High / Lower Low)
+- **LH/HL** → Daralma / Konsolidasyon
+- **HH/LL** → Genişleme / Volatil
+
+### IFVG (Imbalance Fair Value Gap)
+3'lü mum formasyonunda oluşan boşlukları tespit eder. Fiyatın kırıp üstüne çıktığı ve henüz invalide olmamış bölgeler destek olarak gösterilir. **1 saatlik mumdan** hesaplanır.
+
+### Genel Skor (0–100)
+Tüm göstergelerin puanlı ortalaması:
+
+| Skor | Karar |
+|---|---|
+| 75–100 | 🟢🟢 Güçlü BOĞA |
+| 60–74 | 🟢 Boğa Eğilimli |
+| 45–59 | 🟡 Nötr / Belirsiz |
+| 30–44 | 🔴 Ayı Eğilimli |
+| 0–29 | 🔴🔴 Güçlü AYI |
+
+---
+
+## 🔧 Sık Karşılaşılan Sorunlar
+
+**Telegram mesajı gelmiyor:**
+```bash
+# .env dosyasını kontrol et
+cat ~/btc-bot/.env
+
+# Token veya Chat ID'de boşluk olmamalı
+# Bot, oluşturulduktan sonra önce sana /start mesajı atılmalı
+```
+
+**`Cannot find module` hatası:**
+```bash
+cd ~/btc-bot && npm install
+```
+
+**`Cannot read properties of undefined` hatası:**
+Bybit API'ye erişilemiyor olabilir. Sunucunun Bybit'e erişimi olduğunu kontrol et:
+```bash
+curl https://api.bybit.com/v5/market/tickers?category=spot&symbol=BTCUSDT
+```
+
+**PM2 logları çok büyüdü:**
+```bash
+pm2 flush          # logları temizle
+pm2 install pm2-logrotate  # otomatik rotasyon
+```
+
+**Botu güncelledikten sonra:**
+```bash
+cd ~/btc-bot
+git pull           # varsa
+pm2 restart btc-bot
+```
+
+---
+
+## 📁 Geliştirme
+
+```bash
+# Değişiklikleri izleyerek çalıştır (Node 18+)
+npm run dev
+# (node --watch index.js)
+```
+
+---
 
 ##Botun Telegrama Yolladığı Uyarı Örneği ve Anlamı
 ```
